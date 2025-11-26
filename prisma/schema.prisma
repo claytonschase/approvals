@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum ApprovalActivityType {
+  APPROVAL_CREATED
+  STATUS_CHANGE
+  SPEC_UPDATE
+  FILE_UPLOAD
+  EMAIL_SENT
+  APPROVAL_ARCHIVED
+}
+
+model User {
+  id           String                 @id @default(cuid())
+  email        String                 @unique
+  name         String?
+  role         UserRole               @default(USER)
+  passwordHash String
+
+  activityLogs ApprovalActivityLog[]
+
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+}
+
+model ApprovalStatus {
+  id               String      @id @default(cuid())
+  name             String
+  isActiveDefault  Boolean     @default(true)  // used for "active" filter on dashboard
+  isFinal          Boolean     @default(false) // e.g. Approved, Rejected
+  sortOrder        Int         @default(0)
+
+  approvals        Approval[]
+
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+model Approval {
+  id                 String                  @id @default(cuid())
+  name               String
+
+  jobtreadJobId      String
+  jobtreadJobName    String?
+  jobtreadJobNumber  String?
+
+  customerName       String?
+  customerEmail      String?
+
+  specifications     String
+  dueDate            DateTime?
+
+  statusId           String
+  status             ApprovalStatus         @relation(fields: [statusId], references: [id])
+
+  currentVersion     Int                    @default(1)
+  isArchived         Boolean                @default(false)
+
+  emailScheduleId    String?
+  emailSchedule      ApprovalEmailSchedule? @relation(fields: [emailScheduleId], references: [id])
+
+  versions           ApprovalVersion[]
+  files              ApprovalFile[]
+  activityLogs       ApprovalActivityLog[]
+  emailLogs          ApprovalEmailLog[]
+
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+}
+
+model ApprovalVersion {
+  id              String    @id @default(cuid())
+  approvalId      String
+  approval        Approval  @relation(fields: [approvalId], references: [id])
+
+  versionNumber   Int
+  specifications  String
+  revisionComment String?
+
+  createdAt       DateTime  @default(now())
+}
+
+model ApprovalFile {
+  id             String    @id @default(cuid())
+  approvalId     String
+  approval       Approval  @relation(fields: [approvalId], references: [id])
+
+  // which version this file is associated with
+  versionNumber  Int
+
+  fileName       String
+  storageKey     String    // path/key in DigitalOcean Spaces
+  url            String
+  size           Int
+  mimeType       String
+
+  uploadedAt     DateTime  @default(now())
+}
+
+model ApprovalActivityLog {
+  id          String               @id @default(cuid())
+  approvalId  String
+  approval    Approval             @relation(fields: [approvalId], references: [id])
+
+  userId      String?
+  user        User?                @relation(fields: [userId], references: [id])
+
+  type        ApprovalActivityType
+  message     String?
+  metadata    Json?
+
+  createdAt   DateTime             @default(now())
+}
+
+model ApprovalEmailSchedule {
+  id          String                     @id @default(cuid())
+  name        String
+  isDefault   Boolean                    @default(false)
+
+  items       ApprovalEmailScheduleItem[]
+  approvals   Approval[]
+
+  createdAt   DateTime                   @default(now())
+  updatedAt   DateTime                   @updatedAt
+}
+
+model ApprovalEmailScheduleItem {
+  id              String                  @id @default(cuid())
+  scheduleId      String
+  schedule        ApprovalEmailSchedule   @relation(fields: [scheduleId], references: [id])
+
+  offsetDays      Int                     // days from schedule start
+  subjectTemplate String
+  bodyTemplate    String
+  sortOrder       Int                     @default(0)
+
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+}
+
+model ApprovalEmailLog {
+  id                 String    @id @default(cuid())
+  approvalId         String
+  approval           Approval  @relation(fields: [approvalId], references: [id])
+
+  toEmail            String
+  subject            String
+  body               String
+
+  scheduledAt        DateTime
+  sentAt             DateTime?
+  providerMessageId  String?
+  error              String?
+
+  createdAt          DateTime  @default(now())
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   // JSON string or plain text depending on key
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
